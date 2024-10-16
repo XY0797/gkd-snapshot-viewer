@@ -33,7 +33,7 @@ const props = withDefaults(
   },
 );
 
-const selectorText = shallowRef(``);
+const selectorText = shallowRef('[text*="跳过"]');
 type SearchResult =
   | {
       key: number;
@@ -170,17 +170,28 @@ const generateRules = errorTry(
       (t.quickFind ?? t.idQf) && t.attr.vid && s.qfVidValue,
       (t.quickFind ?? t.textQf) && t.attr.text && s.qfTextValue,
     ].some(Boolean);
+
+    let ruleName = prompt("请输入规则的名称（起个名字）：","跳过开屏广告");
+    if (!ruleName) {
+      ruleName = `[ChangeMe]规则名称-${dayjs().format('YYYY-MM-DD HH:mm:ss')}`;
+    };
+
+    let ruleDesc = prompt("请输入规则的解释（描述一下规则的作用）：","跳过开屏广告");
+    if (!ruleDesc) {
+      ruleDesc = '[ChangeMe]本规则由GKD网页端审查工具生成，用于跳过广告。';
+    };
+
     const rule = {
       id: props.snapshot.appId,
       name: getAppInfo(props.snapshot).name,
       groups: [
         {
           key: 1,
-          name: `[ChangeMe]规则名称-${dayjs().format('YYYY-MM-DD HH:mm:ss')}`,
-          desc: `[ChangeMe]本规则由GKD网页端审查工具生成`,
+          name: ruleName,
+          desc: ruleDesc,
           rules: [
             {
-              quickFind: quickFind || undefined,
+              fastQuery: quickFind || undefined,
               activityIds: props.snapshot.activityId,
               matches: s.toString(),
               exampleUrls: jpgUrl,
