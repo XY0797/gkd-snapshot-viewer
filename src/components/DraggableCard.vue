@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useDragMove } from '@/utils/draggable';
+import { useDragMove, useZindex } from '@/utils/draggable';
 
 const props = withDefaults(
   defineProps<{
@@ -150,10 +150,28 @@ const updateTarget = (arg: unknown) => {
     target.value = void 0;
   }
 };
+
+const { setTop, zIndex } = useZindex();
+watch(
+  () => props.show,
+  () => {
+    if (props.show) {
+      setTop();
+    }
+  },
+);
 </script>
 <template>
-  <Teleport to="#app">
-    <div v-if="show" fixed ref="box" :style="currentStyle" :class="props.class">
+  <Teleport to="body">
+    <div
+      v-if="show"
+      fixed
+      ref="box"
+      class="DraggableCard"
+      :style="[currentStyle, { zIndex }]"
+      :class="props.class"
+      @mousedown="setTop"
+    >
       <slot :onRef="updateTarget" :moved="moved"></slot>
 
       <template v-if="sizeDraggable">

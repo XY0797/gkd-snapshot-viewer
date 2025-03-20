@@ -1,6 +1,8 @@
 import type { LocationQuery } from 'vue-router';
 import { message } from './discrete';
 import root from './root';
+import { Teleport } from 'vue';
+import BodyScrollbar from '@/components/BodyScrollbar.vue';
 
 export const obj2form = (...objs: Record<string, unknown>[]) => {
   const fd = new FormData();
@@ -64,16 +66,22 @@ export const copy = (() => {
   };
 })();
 
-export const useAdaptMobile = () => {
-  const isMobile = window.innerHeight > window.innerWidth;
+const useAutoCls = (el: Element, cls: string) => {
+  el.classList.add(cls);
   onMounted(() => {
-    if (isMobile) {
-      root.classList.add('mobile');
-    }
+    el.classList.add(cls);
   });
   onUnmounted(() => {
-    root.classList.remove('mobile');
+    el.classList.remove(cls);
   });
+};
+
+export const useAutoHeight = () => {
+  useAutoCls(root, 'app-auto-h');
+};
+
+export const useAutoWidth = () => {
+  useAutoCls(document.body, 'body-auto-w');
 };
 
 export const timeAgo = (date: number) => {
@@ -143,3 +151,58 @@ export const toInteger = (v: unknown): number | undefined => {
     }
   }
 };
+
+export const ScrollbarWrapper = defineComponent(() => {
+  const show = shallowRef(false);
+  const isMobile = 'ontouchstart' in document.documentElement;
+  show.value = !isMobile;
+  if (isMobile) {
+    document.body.classList.add('mobile');
+    document.documentElement.classList.add('mobile');
+  }
+  return () => {
+    return show.value
+      ? h(Teleport, { to: document.body }, h(BodyScrollbar))
+      : undefined;
+  };
+});
+
+// https://github.com/alan-turing-institute/distinctipy
+export const colorList = [
+  '#ff00ff',
+  '#18821c',
+  '#00ff00',
+  '#007fff',
+  '#ff7f00',
+  '#7fbf7f',
+  '#4e01bf',
+  '#b80836',
+  '#d67ffd',
+  '#00ffff',
+  '#fafe43',
+  '#00ff7f',
+  '#215b8f',
+  '#bd667c',
+  '#84f7f8',
+  '#8dfa01',
+  '#8f6605',
+  '#f5bc95',
+  '#a631f6',
+  '#21bab7',
+  '#4b1e4a',
+  '#7578c8',
+  '#c1b629',
+  '#ff007f',
+  '#0000ff',
+  '#4cc62a',
+  '#00007f',
+  '#fd404b',
+  '#b6fc97',
+  '#f742d8',
+  '#373fea',
+  '#a31b90',
+  '#ff0000',
+  '#03ae66',
+  '#a1b6e3',
+  '#61f9a8',
+];

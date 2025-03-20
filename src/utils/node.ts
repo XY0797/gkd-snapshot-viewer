@@ -16,6 +16,10 @@ const getShortName = (fullName: string): string => {
   return fullName.slice(lstIndex + 1);
 };
 
+const getConnectOperator = (operator: string, index: number): string => {
+  return operator + (index === 1 ? '' : index);
+};
+
 export const getNodeSelectorText = (
   curNode: RawNode /* 当前节点 */,
   isFirst: boolean = true /* 调用时须省略 */,
@@ -27,7 +31,7 @@ export const getNodeSelectorText = (
     if (isFirst) {
       return '[parent=null]';
     } else {
-      return ' <' + lastIndex + ' [parent=null]';
+      return [getConnectOperator('<', lastIndex), '[parent=null]'].join(' ');
     }
   }
   if (curNode.idQf) {
@@ -38,35 +42,22 @@ export const getNodeSelectorText = (
     if (isFirst) {
       return `[${key}="${value}"]`;
     } else {
-      return ' <' + lastIndex + ` [${key}="${value}"]`;
+      return [getConnectOperator('<', lastIndex), `[${key}="${value}"]`].join(
+        ' ',
+      );
     }
   }
-  // 处理一般的递归情况
   if (isFirst) {
-    // 第一次调用，当前节点即为目标节点
-    // 返回完整的选择器，假设getSelector会返回后面应该拼接的文本
-    // （递归基在前面已经处理掉了，所以说这里一定会有后缀）
-    return (
-      '@' +
-      getShortName(curNode.attr.name) +
-      getNodeSelectorText(curNode.parent, false, curNode.attr.index + 1)
-      /* 当前节点的index转序号后传递给下一层函数调用
-       * 否则下一层函数不知道现在的节点是父节点的第几个儿子 */
-    );
+    return [
+      '@' + getShortName(curNode.attr.name),
+      getNodeSelectorText(curNode.parent, false, curNode.attr.index + 1),
+    ].join(' ');
   }
-  // 不是第一次调用，所以说函数的目标是拼接返回选择器的后缀部分
-  return (
-    ' <' +
-    lastIndex /* 当前处理的是目标节点的(间接)父节点
-     * 所以说这里取子节点（也就是上一层函数的节点）的index */ +
-    ' ' +
-    getShortName(curNode.attr.name) +
-    getNodeSelectorText(
-      curNode.parent,
-      false,
-      curNode.attr.index + 1,
-    ) /* 递归构造后缀 */
-  );
+  return [
+    getConnectOperator('<', lastIndex),
+    getShortName(curNode.attr.name),
+    getNodeSelectorText(curNode.parent, false, curNode.attr.index + 1),
+  ].join(' ');
 };
 
 export const listToTree = (nodes: RawNode[]) => {
@@ -115,9 +106,12 @@ const equalRectNode = (a: RawNode, b: RawNode) => {
 };
 
 const isAncestor = (parent: RawNode | undefined, child: RawNode): boolean => {
+  if (parent?.children?.length === 0) {
+    return false;
+  }
   let p = child.parent;
   while (true) {
-    if (p === parent) return true;
+    if (p?.id === parent?.id) return true;
     p = p?.parent;
     if (!p) break;
   }
@@ -183,6 +177,15 @@ export function* traverseNode(node: RawNode, skipKeys: number[] = []) {
     }
     yield top;
     stack.push(...[...top.children].reverse());
+  }
+}
+
+function* traverseDescendants(node: RawNode) {
+  const stack = node.children.toReversed();
+  while (stack.length > 0) {
+    const top = stack.pop()!;
+    yield top;
+    stack.push(...top.children.toReversed());
   }
 }
 
@@ -300,4 +303,141 @@ export const getNodeStyle = (node: RawNode, focusNode?: RawNode) => {
     fontWeight,
     color,
   };
+};
+
+const nodeCompareFn = (a: RawNode, b: RawNode) => {
+  return a.id - b.id;
+};
+
+const getTopNode = (nodes: RawNode[], subNodes: RawNode[]): RawNode => {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i];
+    if (
+      node.children.length &&
+      subNodes.every((n) => node === n || isAncestor(node, n))
+    ) {
+      return node;
+    }
+  }
+  throw new Error('no top node');
+};
+
+const emptyArray = [] as [];
+
+export interface TrackTreeContext {
+  topNode: RawNode;
+  getLabel: (node: RawNode) => string;
+  getChildren: (node: RawNode) => RawNode[];
+  isPlaceholder: (node: RawNode) => boolean;
+}
+
+export const getTrackTreeContext = (
+  nodes: RawNode[],
+  subNodes: RawNode[],
+): TrackTreeContext => {
+  const topNode = getTopNode(nodes, subNodes);
+  const minTreeNodes = new Set([topNode, ...subNodes]);
+  const stack = topNode.children.toReversed();
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (subNodes.some((n) => isAncestor(node, n))) {
+      minTreeNodes.add(node);
+      stack.push(...node.children.toReversed());
+    }
+  }
+  const brotherPlaceholderNodes = new Set<RawNode>();
+  const descendantPlaceholderNodes = new Map<RawNode, RawNode | undefined>();
+  const getLabel = (node: RawNode): string => {
+    if (brotherPlaceholderNodes.has(node)) {
+      const children = node.parent?.children || emptyArray;
+      const i = children.indexOf(node);
+      const lastNode =
+        children.find((n, i2) => {
+          return (
+            i2 > i && !minTreeNodes.has(n) && minTreeNodes.has(children[i2 + 1])
+          );
+        }) || children.at(-1)!;
+      return `[${i} ~ ${lastNode.attr.index}]`;
+    }
+    if (descendantPlaceholderNodes.get(node)) {
+      return `[ ... ]`;
+    }
+
+    return getLimitLabel(node);
+  };
+  const getOnlyDescendant = (node: RawNode): RawNode | undefined => {
+    const n1 = node.children.find(
+      (n) => minTreeNodes.has(n) && !subNodes.includes(n),
+    );
+    if (!n1) return;
+    if (
+      node.children.some(
+        (n) => n !== n1 && (subNodes.includes(n) || minTreeNodes.has(n)),
+      )
+    ) {
+      return;
+    }
+    return getOnlyDescendant(n1) || n1;
+  };
+  const childrenCache = new Map<number, RawNode[]>();
+  const getChildren = (node: RawNode): RawNode[] => {
+    if (node.children.every((n) => !minTreeNodes.has(n))) {
+      return emptyArray;
+    }
+    if (descendantPlaceholderNodes.has(node)) {
+      const c = descendantPlaceholderNodes.get(node);
+      if (c) {
+        return [c];
+      }
+    } else if (!subNodes.includes(node)) {
+      const onlyDescendant = getOnlyDescendant(node);
+      if (onlyDescendant && !node.children.includes(onlyDescendant)) {
+        descendantPlaceholderNodes.set(node, onlyDescendant);
+        return [onlyDescendant];
+      } else {
+        descendantPlaceholderNodes.set(node, undefined);
+      }
+    }
+    if (node.children.length <= 1) {
+      return node.children;
+    }
+    if (childrenCache.get(node.id)) {
+      return childrenCache.get(node.id)!;
+    }
+    const list: RawNode[] = [];
+    for (let i = 0; i < node.children.length; i++) {
+      const child = node.children[i];
+      const prev = node.children[i - 1];
+      const next = node.children[i + 1];
+      if (minTreeNodes.has(child)) {
+        list.push(child);
+      } else if (
+        (!prev || minTreeNodes.has(prev)) &&
+        node.children.some((n, i2) => i2 > i && minTreeNodes.has(n))
+      ) {
+        list.push(child);
+        if (next && !minTreeNodes.has(next)) {
+          brotherPlaceholderNodes.add(child);
+        }
+      }
+    }
+    childrenCache.set(node.id, list);
+    return list;
+  };
+  const isPlaceholder = (node: RawNode) => {
+    return (
+      brotherPlaceholderNodes.has(node) ||
+      Boolean(descendantPlaceholderNodes.get(node))
+    );
+  };
+  return {
+    topNode,
+    getLabel,
+    getChildren,
+    isPlaceholder,
+  };
+};
+
+export const getNodeQf = (node: RawNode): boolean => {
+  return Boolean(node.idQf || node.textQf || node.quickFind);
 };

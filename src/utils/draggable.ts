@@ -77,3 +77,18 @@ export const useDragMove = (xFilter: (x: number) => boolean) => {
     offset,
   };
 };
+
+let currentMaxZIndex = 1000;
+export const useZindex = () => {
+  currentMaxZIndex++;
+  const zIndex = shallowRef(currentMaxZIndex);
+  const setTop = () => {
+    if (zIndex.value === currentMaxZIndex) return;
+    currentMaxZIndex++;
+    zIndex.value = currentMaxZIndex;
+  };
+  return {
+    zIndex,
+    setTop,
+  };
+};

@@ -5,6 +5,7 @@ import process from 'node:process';
 import unocss from 'unocss/vite';
 import data from 'unplugin-data/vite';
 import { defineConfig } from 'vite';
+import type { ESBuildOptions } from 'vite';
 import { mirror, unAutoImport } from './plugins';
 
 export default defineConfig(() => {
@@ -23,14 +24,6 @@ export default defineConfig(() => {
         '@': process.cwd() + '/src',
       },
     },
-    css: {
-      preprocessorOptions: {
-        scss: {
-          // https://github.com/sass/dart-sass/issues/2352#issuecomment-2358290696
-          api: 'modern',
-        },
-      },
-    },
     server: {
       host: '127.0.0.1',
       port: 8444,
@@ -42,6 +35,10 @@ export default defineConfig(() => {
     build: {
       target: `chrome70`,
       sourcemap: true,
+      chunkSizeWarningLimit: Number.MAX_SAFE_INTEGER,
+    },
+    esbuild: <ESBuildOptions>{
+      legalComments: 'none',
     },
   };
 });
